@@ -1,9 +1,8 @@
 #include <windows.h>
 #include <time.h>
 
-#define N_CRABS	32
-#define MAXVEL 8
-#define MILLISEC_SLEEP 2000
+#define N_CRABS	30
+#define MILLISEC_SLEEP 5000
 
 typedef struct _CRAB
 {
@@ -52,6 +51,7 @@ char crab_right[64] = {	0, 1, 0, 0, 1, 1, 1, 0,
 HBITMAP hCrabUpBitmap, hCrabDownBitmap, hCrabLeftBitmap, hCrabRightBitmap;
 HDC hDesktopDC, hFolderViewMem;
 
+/* Creates the bitmap of the crab */
 void create_crab(char *crab_map, HDC *hCrabDC, HBITMAP *hCrabBitmap)
 {
 	int i, j;
@@ -64,6 +64,7 @@ void create_crab(char *crab_map, HDC *hCrabDC, HBITMAP *hCrabBitmap)
 				SetPixel(*hCrabDC, j, i, 0x00000000);	// due to transparency problems
 }
 
+/* Deletes the crab from the old position */
 void EraseCrab(CRAB crab)
 {
 	char *crab_map;
@@ -72,14 +73,14 @@ void EraseCrab(CRAB crab)
 
 	if(abs(crab.vx) >= abs(crab.vy))
 		if(crab.vx > 0)
-			crab_map = crab_up;
-		else
-			crab_map = crab_down;
-	else
-		if(crab.vy > 0)
 			crab_map = crab_right;
 		else
 			crab_map = crab_left;
+	else
+		if(crab.vy > 0)
+			crab_map = crab_down;
+		else
+			crab_map = crab_up;
 
 	for(i = 0; i < 8; i++)
 		for(j = 0; j < 8; j++)
@@ -91,6 +92,7 @@ void EraseCrab(CRAB crab)
 			}
 }
 
+/* Draws the crab on screen */
 void DrawCrab(CRAB crab)
 {
 	HDC hImageDC, hMaskDC;
@@ -98,14 +100,14 @@ void DrawCrab(CRAB crab)
 
 	if(abs(crab.vx) >= abs(crab.vy))
 		if(crab.vx > 0)
-			hCrabBitmap = hCrabUpBitmap;
-		else
-			hCrabBitmap = hCrabDownBitmap;
-	else
-		if(crab.vy > 0)
 			hCrabBitmap = hCrabRightBitmap;
 		else
 			hCrabBitmap = hCrabLeftBitmap;
+	else
+		if(crab.vy > 0)
+			hCrabBitmap = hCrabDownBitmap;
+		else
+			hCrabBitmap = hCrabUpBitmap;
 
 	hMaskBitmap = CreateBitmap(8, 8, 1, 1, NULL);
 
@@ -126,6 +128,32 @@ void DrawCrab(CRAB crab)
  	DeleteObject(hMaskBitmap);
 	DeleteDC(hMaskDC);
 	DeleteDC(hImageDC);
+}
+
+/* Generates a random number between -i/2 and i/2 */
+int generate_small(unsigned int i)
+{
+	return ((rand() % i) - (i >> 1));
+}
+
+/* Generates a new velocity between -7 and 7 */
+void generate_velocity(int *vx, int *vy)
+{
+	do
+	{
+		*vx = generate_small(13);
+		*vy = generate_small(13);
+	} while((vx == 0)  && (vy == 0));
+}
+
+/* Changes the velocity by -1 and 1 */
+void change_velocity(int *vx, int *vy)
+{
+	do
+	{
+		*vx += generate_small(3);
+		*vy += generate_small(3);
+	} while((*vx < -7) && (*vx > 7) && (*vy < -7) && (*vy > 7));
 }
 
 BOOL CALLBACK EnumChildProc(HWND hwnd, LPARAM lParam)
@@ -149,7 +177,7 @@ BOOL CALLBACK EnumChildProc(HWND hwnd, LPARAM lParam)
 
 int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
-	int i, new_x, new_y, max_x, max_y, d;
+	int i, new_x, new_y, max_x, max_y;
 	CRAB crab[N_CRABS];
 	HDC hCrabDC, hFolderViewDC;
 	HWND hParentFolderView, hFolderView;
@@ -190,10 +218,9 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 	srand((unsigned int)time(NULL));
 	for(i = 0; i < N_CRABS; i++)
 	{
-		crab[i].x = rand() % GetSystemMetrics(SM_CXSCREEN);
+		crab[i].x = MulDiv(max_x - 20, i, N_CRABS);
 		crab[i].y = 0;
-		crab[i].vx = (rand() % (2 * MAXVEL - 1)) - MAXVEL;
-		crab[i].vy = (rand() % (2 * MAXVEL - 1)) - MAXVEL;
+		generate_velocity(&(crab[i].vx), &(crab[i].vy));
 	}
 
 	while(1)
@@ -226,36 +253,20 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 			// Delete the crab, please
 			EraseCrab(crab[i]);
 
-			while(1)
+			if(generate_small(7) == 0)
+				change_velocity(&(crab[i].vx), &(crab[i].vy));
+
+			new_x = crab[i].x + crab[i].vx;
+			new_y = crab[i].y + crab[i].vy;
+			while(new_x < 0 || new_x >= max_x - 8 || new_y < 0 || new_y >= max_y - 8)
 			{
+				generate_velocity(&(crab[i].vx), &(crab[i].vy));
 				new_x = crab[i].x + crab[i].vx;
 				new_y = crab[i].y + crab[i].vy;
-
-				if(new_x >= 0 && new_x < max_x - 8 && new_y >= 0 && new_y < max_y - 8)
-					break;
-
-				crab[i].vx = (rand() % (2 * MAXVEL - 1)) - MAXVEL;
-				crab[i].vy = (rand() % (2 * MAXVEL - 1)) - MAXVEL;
 			}
 
 			crab[i].x = new_x;
 			crab[i].y = new_y;
-
-			if(crab[i].vx >= MAXVEL - 1)
-				d = (rand() % 2) - 1;
-			else if(crab[i].vx <= 1 - MAXVEL)
-				d = (rand() % 2);
-			else
-				d = (rand() % 3) - 1;
-			crab[i].vx += d;
-
-			if(crab[i].vy >= MAXVEL - 1)
-				d = (rand() % 2) - 1;
-			else if(crab[i].vy <= 1 - MAXVEL)
-				d = (rand() % 2);
-			else
-				d = (rand() % 3) - 1;
-			crab[i].vy += d;
 
 			DrawCrab(crab[i]);
 		}
